@@ -4,3 +4,6 @@
 *~
 # Packaged bundles
 *.zip
+
+# Local data backups (never commit)
+/context-log-backups/

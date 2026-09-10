@@ -16,15 +16,55 @@ The extension **code** lives separately in
 replaces only that code directory; it must never delete, move, or overwrite the
 data directory.
 
+## Mandatory testing procedure: back up → test → restore
+
+Whenever a new version is developed and **any** testing is done in the widget,
+you MUST follow this exact order. This is not optional. Real user records have
+already been destroyed once by test steps that deleted the data files; that must
+never happen again.
+
+1. **Back up first.** Before installing a test build or interacting with the
+   widget for testing, copy the real data directory to a timestamped backup
+   OUTSIDE the data directory. Do this even for "quick" tests.
+
+   ```sh
+   BK="$HOME/.local/share/context-log-backups/$(date +%Y%m%d-%H%M%S)"
+   mkdir -p "$BK"
+   cp -a "$HOME/.local/share/context-log/." "$BK/" 2>/dev/null || true
+   echo "backed up real data to $BK"
+   ```
+
+2. **Test.** Only now install the new version and exercise it. Any seeding,
+   clearing, or `rm` of `entries.jsonl` / `todos.json` during testing acts on
+   throwaway test data, never on records you have not first backed up.
+
+3. **Restore last.** When testing is finished, restore the real data from the
+   backup you made in step 1, discarding whatever the test left behind:
+
+   ```sh
+   rm -f "$HOME/.local/share/context-log/entries.jsonl" \
+         "$HOME/.local/share/context-log/todos.json"
+   cp -a "$BK/." "$HOME/.local/share/context-log/" 2>/dev/null || true
+   echo "restored real data from $BK"
+   ```
+
+   Then reopen the widget and confirm the real records are all present before
+   considering the work done.
+
+Never delete or overwrite the real data files without a verified backup made in
+step 1 first. If in doubt, keep the backup — backups are cheap, the records are
+irreplaceable. Keep the timestamped backups under
+`~/.local/share/context-log-backups/`; they are never committed to git.
+
 ### Rules
 
 1. **Reinstall keeps data.** `install.sh` may `rm -rf` and re-copy only the
    extension code directory (`.../gnome-shell/extensions/context-log@ales.novak`).
    It must never touch `~/.local/share/context-log/`. Verify this before
    changing the installer.
-2. **No destructive test steps in the real data dir.** When testing, back up
-   `~/.local/share/context-log/` first, or point the extension at a throwaway
-   path. Do not `rm` the user's real `entries.jsonl` / `todos.json`.
+2. **No destructive test steps in the real data dir.** Always follow the
+   back up → test → restore procedure above. Never `rm` or overwrite the user's
+   real `entries.jsonl` / `todos.json` without a verified backup made first.
 3. **Format changes migrate in place.** If a new version changes the on-disk
    schema, it must read the old data and convert it, keeping every existing
    record. Never start from an empty file when old data is present. Prefer
