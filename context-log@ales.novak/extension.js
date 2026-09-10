@@ -12,6 +12,8 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import {CheckBox} from 'resource:///org/gnome/shell/ui/checkBox.js';
 
 // One line per record: {"time":"2026-09-10T10:41:23+02:00","description":"Fix build"}
+// A stop record {"time":"...","stop":true} ends the running task without
+// starting another one (lunch, end of day).
 const LOG_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log', 'entries.jsonl']);
 const TODO_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log', 'todos.json']);
 const PREVIOUS_LIMIT = 10;
@@ -35,9 +37,11 @@ function readEntries() {
         if (!line.trim())
             continue;
         try {
-            const {time, description} = JSON.parse(line);
+            const {time, description, stop} = JSON.parse(line);
             const dt = GLib.DateTime.new_from_iso8601(time, null);
-            if (dt && description)
+            if (dt && stop === true)
+                entries.push({unix: dt.to_unix(), stop: true});
+            else if (dt && description)
                 entries.push({unix: dt.to_unix(), description});
         } catch (e) {
             console.warn(`Context Log: skipping line: ${line}`);
@@ -46,11 +50,12 @@ function readEntries() {
     return entries;
 }
 
-function appendEntry(description) {
+// Append one record, e.g. {description: 'Fix build'} or {stop: true}.
+function appendEntry(record) {
     const time = GLib.DateTime.new_now_local().format('%Y-%m-%dT%H:%M:%S%:z');
     GLib.mkdir_with_parents(GLib.path_get_dirname(LOG_FILE), 0o700);
     const stream = Gio.File.new_for_path(LOG_FILE).append_to(Gio.FileCreateFlags.NONE, null);
-    stream.write_all(new TextEncoder().encode(`${JSON.stringify({time, description})}\n`), null);
+    stream.write_all(new TextEncoder().encode(`${JSON.stringify({time, ...record})}\n`), null);
     stream.close(null);
 }
 
@@ -159,6 +164,12 @@ class ContextLogIndicator extends PanelMenu.Button {
         entryItem.add_child(this._addTodoCheck);
         this.menu.addMenuItem(entryItem);
 
+        // Stop the running task without starting another (lunch, end of day).
+        // Only sensitive while a task is running.
+        this._stopItem = new PopupMenu.PopupImageMenuItem('Stop current task', 'media-playback-stop-symbolic');
+        this._stopItem.connect('activate', () => this._stop());
+        this.menu.addMenuItem(this._stopItem);
+
         // Previous descriptions: click one to record a switch to it.
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('Previous'));
         this._previousSection = new PopupMenu.PopupMenuSection();
@@ -222,9 +233,16 @@ class ContextLogIndicator extends PanelMenu.Button {
             return;
         const last = this._entries[this._entries.length - 1];
         if (!last || last.description !== description)
-            appendEntry(description);
+            appendEntry({description});
         if (addTodo)
             this._addTodo(description);
+        this._refresh();
+    }
+
+    _stop() {
+        const last = this._entries[this._entries.length - 1];
+        if (last && !last.stop)
+            appendEntry({stop: true});
         this._refresh();
     }
 
@@ -241,13 +259,15 @@ class ContextLogIndicator extends PanelMenu.Button {
         this._entries = readEntries();
         const now = Math.floor(Date.now() / 1000);
         const last = this._entries[this._entries.length - 1];
-        this._label.text = last ? last.description : '';
+        const running = !!last && !last.stop;
+        this._label.text = running ? last.description : '';
+        this._stopItem.setSensitive(running);
 
         this._previousSection.removeAll();
         const seen = new Set();
         for (let i = this._entries.length - 1; i >= 0 && seen.size < PREVIOUS_LIMIT; i--) {
-            const {description} = this._entries[i];
-            if (seen.has(description))
+            const {description, stop} = this._entries[i];
+            if (stop || seen.has(description))
                 continue;
             seen.add(description);
             const item = new PopupMenu.PopupMenuItem(description);
@@ -265,12 +285,23 @@ class ContextLogIndicator extends PanelMenu.Button {
                 text: GLib.DateTime.new_from_unix_local(entry.unix).format('%Y-%m-%d %H:%M'),
                 style_class: 'context-log-time',
             }));
-            const desc = new St.Label({text: entry.description, x_expand: true, style_class: 'context-log-desc'});
+            const desc = new St.Label({
+                text: entry.stop ? 'Stopped' : entry.description,
+                x_expand: true,
+                style_class: entry.stop ? 'context-log-desc context-log-stop' : 'context-log-desc',
+            });
             desc.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+            if (entry.stop)
+                desc.opacity = 140;
             row.add_child(desc);
-            row.add_child(new St.Label({text: formatDuration(end - entry.unix), style_class: 'context-log-duration'}));
-            const rowBtn = new St.Button({child: row, x_expand: true, style_class: 'context-log-rowbtn'});
-            onDoubleClick(rowBtn, () => this._record(entry.description));
+            // A stop row has no "time spent": it only ends the task above it.
+            row.add_child(new St.Label({
+                text: entry.stop ? '' : formatDuration(end - entry.unix),
+                style_class: 'context-log-duration',
+            }));
+            const rowBtn = new St.Button({child: row, x_expand: true, reactive: !entry.stop, style_class: 'context-log-rowbtn'});
+            if (!entry.stop)
+                onDoubleClick(rowBtn, () => this._record(entry.description));
             this._timeline.add_child(rowBtn);
         }
 
