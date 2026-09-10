@@ -16,6 +16,7 @@ const LOG_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log', 
 const TODO_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log', 'todos.json']);
 const PREVIOUS_LIMIT = 10;
 const TIMELINE_LIMIT = 50;
+const DOUBLE_CLICK_MS = 400;
 
 // To-do priority: High > Medium > Low. New to-dos start at Medium; clicking
 // the chip cycles Medium -> High -> Low -> Medium.
@@ -51,6 +52,22 @@ function appendEntry(description) {
     const stream = Gio.File.new_for_path(LOG_FILE).append_to(Gio.FileCreateFlags.NONE, null);
     stream.write_all(new TextEncoder().encode(`${JSON.stringify({time, description})}\n`), null);
     stream.close(null);
+}
+
+// Run `callback` when `button` is pressed twice within DOUBLE_CLICK_MS.
+// A single press propagates so the button still shows its pressed state.
+function onDoubleClick(button, callback) {
+    let lastPressMs = 0;
+    button.connect('button-press-event', () => {
+        const nowMs = GLib.get_monotonic_time() / 1000;
+        if (nowMs - lastPressMs < DOUBLE_CLICK_MS) {
+            lastPressMs = 0;
+            callback();
+            return Clutter.EVENT_STOP;
+        }
+        lastPressMs = nowMs;
+        return Clutter.EVENT_PROPAGATE;
+    });
 }
 
 function formatDuration(seconds) {
@@ -169,7 +186,8 @@ class ContextLogIndicator extends PanelMenu.Button {
         todoSection.actor.add_child(this._todoList);
         this.menu.addMenuItem(todoSection);
 
-        // Timeline: date-time, description, time spent.
+        // Timeline: date-time, description, time spent. Double-click a row to
+        // work on that task again.
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('Timeline'));
         this._timeline = new St.BoxLayout({vertical: true});
         const scroll = new St.ScrollView({
@@ -251,7 +269,9 @@ class ContextLogIndicator extends PanelMenu.Button {
             desc.clutter_text.ellipsize = Pango.EllipsizeMode.END;
             row.add_child(desc);
             row.add_child(new St.Label({text: formatDuration(end - entry.unix), style_class: 'context-log-duration'}));
-            this._timeline.add_child(row);
+            const rowBtn = new St.Button({child: row, x_expand: true, style_class: 'context-log-rowbtn'});
+            onDoubleClick(rowBtn, () => this._record(entry.description));
+            this._timeline.add_child(rowBtn);
         }
 
         this._refreshTodos();
@@ -319,17 +339,7 @@ class ContextLogIndicator extends PanelMenu.Button {
                 child: label,
                 style_class: 'context-log-todo-labelbtn',
             });
-            let lastPressMs = 0;
-            labelBtn.connect('button-press-event', () => {
-                const nowMs = GLib.get_monotonic_time() / 1000;
-                if (nowMs - lastPressMs < 400) {
-                    lastPressMs = 0;
-                    this._record(todo.text);
-                    return Clutter.EVENT_STOP;
-                }
-                lastPressMs = nowMs;
-                return Clutter.EVENT_PROPAGATE;
-            });
+            onDoubleClick(labelBtn, () => this._record(todo.text));
             if (todo.done)
                 labelBtn.opacity = 140;
             const remove = new St.Button({
