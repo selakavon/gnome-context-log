@@ -9,6 +9,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {CheckBox} from 'resource:///org/gnome/shell/ui/checkBox.js';
 
 // One line per record: {"time":"2026-09-10T10:41:23+02:00","description":"Fix build"}
 const LOG_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log', 'entries.jsonl']);
@@ -116,10 +117,11 @@ class ContextLogIndicator extends PanelMenu.Button {
         this.add_child(box);
 
         // Entry: type a description, Enter records it with the current time.
+        // With "Add as todo" checked (the default) it also goes on the to-do list.
         const entryItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         this._entry = new St.Entry({hint_text: 'What are you working on?', x_expand: true, style_class: 'context-log-entry'});
         this._entry.clutter_text.connect('activate', () => {
-            this._record(this._entry.get_text());
+            this._record(this._entry.get_text(), {addTodo: this._addTodoCheck.checked});
             this._closeOnRelease = true;
         });
         // Close on the Return *release*: closing on the press would let the
@@ -132,6 +134,11 @@ class ContextLogIndicator extends PanelMenu.Button {
             return Clutter.EVENT_STOP;
         });
         entryItem.add_child(this._entry);
+        this._addTodoCheck = new CheckBox('Add as todo');
+        this._addTodoCheck.checked = true;
+        this._addTodoCheck.y_align = Clutter.ActorAlign.CENTER;
+        this._addTodoCheck.getLabelActor().clutter_text.set_line_wrap(false);
+        entryItem.add_child(this._addTodoCheck);
         this.menu.addMenuItem(entryItem);
 
         // Previous descriptions: click one to record a switch to it.
@@ -179,6 +186,7 @@ class ContextLogIndicator extends PanelMenu.Button {
                 return;
             this._closeOnRelease = false;
             this._entry.set_text('');
+            this._addTodoCheck.checked = true;
             this._refresh();
             this._focusId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                 this._focusId = 0;
@@ -189,14 +197,25 @@ class ContextLogIndicator extends PanelMenu.Button {
         this._refresh();
     }
 
-    _record(description) {
+    _record(description, {addTodo = false} = {}) {
         description = description.trim();
         if (!description)
             return;
         const last = this._entries[this._entries.length - 1];
         if (!last || last.description !== description)
             appendEntry(description);
+        if (addTodo)
+            this._addTodo(description);
         this._refresh();
+    }
+
+    // Add a to-do with this text unless one already exists (done or not).
+    _addTodo(text) {
+        const todos = readTodos();
+        if (todos.some(t => t.text === text))
+            return;
+        todos.push({text, done: false, priority: 'med', added: Date.now()});
+        writeTodos(todos);
     }
 
     _refresh() {
