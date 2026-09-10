@@ -7,6 +7,9 @@
 .context-log-desc { max-width: 380px; }
 .context-log-duration { min-width: 4em; text-align: right; }
 .context-log-stop { font-style: italic; }
+.context-log-stop-btn { padding: 2px; border-radius: 5px; }
+.context-log-stop-btn:hover { background-color: rgba(127,127,127,0.25); }
+.context-log-stop-spacer { width: 20px; }
 .context-log-todo-list { padding: 2px 0; }
 .context-log-todo-row { padding: 1px 8px 1px 16px; spacing: 6px; }
 .context-log-todo-check:hover, .context-log-todo-remove:hover, .context-log-todo-labelbtn:hover { background-color: rgba(127,127,127,0.15); border-radius: 5px; }

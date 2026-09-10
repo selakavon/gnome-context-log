@@ -164,12 +164,6 @@ class ContextLogIndicator extends PanelMenu.Button {
         entryItem.add_child(this._addTodoCheck);
         this.menu.addMenuItem(entryItem);
 
-        // Stop the running task without starting another (lunch, end of day).
-        // Only sensitive while a task is running.
-        this._stopItem = new PopupMenu.PopupImageMenuItem('Stop current task', 'media-playback-stop-symbolic');
-        this._stopItem.connect('activate', () => this._stop());
-        this.menu.addMenuItem(this._stopItem);
-
         // Previous descriptions: click one to record a switch to it.
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('Previous'));
         this._previousSection = new PopupMenu.PopupMenuSection();
@@ -198,7 +192,7 @@ class ContextLogIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(todoSection);
 
         // Timeline: date-time, description, time spent. Double-click a row to
-        // work on that task again.
+        // work on that task again; the newest row has a stop button.
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('Timeline'));
         this._timeline = new St.BoxLayout({vertical: true});
         const scroll = new St.ScrollView({
@@ -261,7 +255,6 @@ class ContextLogIndicator extends PanelMenu.Button {
         const last = this._entries[this._entries.length - 1];
         const running = !!last && !last.stop;
         this._label.text = running ? last.description : '';
-        this._stopItem.setSensitive(running);
 
         this._previousSection.removeAll();
         const seen = new Set();
@@ -305,6 +298,18 @@ class ContextLogIndicator extends PanelMenu.Button {
                 text: entry.stop ? '' : formatDuration(end - entry.unix),
                 style_class: 'context-log-duration',
             }));
+            // Stop button on the running task (the newest row); the other rows
+            // get a same-width spacer so the columns stay aligned.
+            if (i === this._entries.length - 1 && !entry.stop) {
+                const stopBtn = new St.Button({
+                    style_class: 'context-log-stop-btn',
+                    child: new St.Icon({icon_name: 'media-playback-stop-symbolic', icon_size: 16}),
+                });
+                stopBtn.connect('clicked', () => this._stop());
+                row.add_child(stopBtn);
+            } else {
+                row.add_child(new St.Widget({style_class: 'context-log-stop-spacer'}));
+            }
             if (!entry.stop)
                 onDoubleClick(row, () => this._record(entry.description));
             this._timeline.add_child(row);
