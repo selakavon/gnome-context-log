@@ -1,0 +1,14 @@
+.context-log-panel-label { max-width: 340px; }
+.context-log-entry { min-width: 24em; }
+.context-log-timeline { max-height: 320px; }
+.context-log-row { padding: 2px 12px 2px 24px; spacing: 12px; }
+.context-log-time { font-family: monospace; }
+.context-log-desc { max-width: 380px; }
+.context-log-duration { min-width: 4em; text-align: right; }
+.context-log-todo-list { padding: 2px 0; }
+.context-log-todo-row { padding: 1px 8px 1px 16px; spacing: 6px; }
+.context-log-todo-check:hover, .context-log-todo-remove:hover, .context-log-todo-labelbtn:hover { background-color: rgba(127,127,127,0.15); border-radius: 5px; }
+.context-log-todo-check, .context-log-todo-remove { padding: 2px; border-radius: 5px; }
+.context-log-todo-labelbtn { padding: 2px 4px; border-radius: 5px; }
+.context-log-todo-empty { padding: 4px 12px 4px 24px; }
+.context-log-todo-current { background-color: rgba(120,160,255,0.16); border-radius: 6px; }

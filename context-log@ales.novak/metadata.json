@@ -1,0 +1,7 @@
+{
+  "uuid": "context-log@ales.novak",
+  "name": "Context Log",
+  "description": "Record what you are working on, pick a previous task again, and see a timeline of context switches with the time spent on each.",
+  "shell-version": ["45", "46", "47"],
+  "version": 1
+}
