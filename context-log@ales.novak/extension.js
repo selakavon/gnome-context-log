@@ -269,10 +269,11 @@ class ContextLogIndicator extends PanelMenu.Button {
             });
             check.connect('clicked', toggle);
             // Priority chip: click to cycle High -> Medium -> Low.
-            const prio = new St.Button({style_class: `context-log-prio context-log-prio-${todo.priority}`});
+            const prio = new St.Button({style_class: 'context-log-prio'});
             prio.set_child(new St.Label({
                 text: PRIORITY_LABEL[todo.priority],
                 y_align: Clutter.ActorAlign.CENTER,
+                style_class: `context-log-prio-letter context-log-prio-${todo.priority}`,
             }));
             prio.connect('clicked', () => {
                 todo.priority = PRIORITY_NEXT[todo.priority];

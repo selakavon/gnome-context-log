@@ -12,8 +12,9 @@
 .context-log-todo-labelbtn { padding: 2px 4px; border-radius: 5px; }
 .context-log-todo-empty { padding: 4px 12px 4px 24px; }
 .context-log-todo-current { background-color: rgba(120,160,255,0.16); border-radius: 6px; }
-.context-log-prio { font-weight: bold; min-width: 1.5em; text-align: center; border-radius: 5px; padding: 0 4px; }
+.context-log-prio { min-width: 1.5em; text-align: center; border-radius: 5px; padding: 0 4px; }
 .context-log-prio:hover { background-color: rgba(127,127,127,0.18); }
+.context-log-prio-letter { font-weight: bold; }
 .context-log-prio-high { color: #e01b24; }
-.context-log-prio-med { color: #9aa0a6; }
-.context-log-prio-low { color: #6f767d; }
+.context-log-prio-med { color: #e5a50a; }
+.context-log-prio-low { color: #2ec27e; }
