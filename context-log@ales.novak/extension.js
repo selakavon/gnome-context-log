@@ -16,6 +16,12 @@ const TODO_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log',
 const PREVIOUS_LIMIT = 10;
 const TIMELINE_LIMIT = 50;
 
+// To-do priority: High > Medium > Low. Click the chip to cycle.
+const PRIORITIES = ['high', 'med', 'low'];
+const PRIORITY_RANK = {high: 0, med: 1, low: 2};
+const PRIORITY_NEXT = {high: 'med', med: 'low', low: 'high'};
+const PRIORITY_LABEL = {high: 'H', med: 'M', low: 'L'};
+
 function readEntries() {
     const file = Gio.File.new_for_path(LOG_FILE);
     if (!file.query_exists(null))
@@ -52,20 +58,39 @@ function formatDuration(seconds) {
     return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
 }
 
-// To-dos: a JSON array of {text, done}.
+// To-dos: a JSON array of {text, done, priority, added}.
+// Older files (without priority/added) are migrated in place on read; no data
+// is dropped. `added` is a monotonic key used only to order equal priorities.
 function readTodos() {
     const file = Gio.File.new_for_path(TODO_FILE);
     if (!file.query_exists(null))
         return [];
+    let data;
     try {
         const [, bytes] = file.load_contents(null);
-        const data = JSON.parse(new TextDecoder().decode(bytes));
-        if (Array.isArray(data))
-            return data.filter(t => t && typeof t.text === 'string').map(t => ({text: t.text, done: !!t.done}));
+        data = JSON.parse(new TextDecoder().decode(bytes));
     } catch (e) {
         console.warn(`Context Log: cannot read todos: ${e.message}`);
+        return [];
     }
-    return [];
+    if (!Array.isArray(data))
+        return [];
+    let changed = false;
+    const todos = [];
+    data.forEach((t, i) => {
+        if (!t || typeof t.text !== 'string') {
+            changed = true;
+            return;
+        }
+        const priority = PRIORITIES.includes(t.priority) ? t.priority : 'med';
+        const added = typeof t.added === 'number' ? t.added : i;
+        if (t.priority !== priority || typeof t.added !== 'number')
+            changed = true;
+        todos.push({text: t.text, done: !!t.done, priority, added});
+    });
+    if (changed)
+        writeTodos(todos);
+    return todos;
 }
 
 function writeTodos(todos) {
@@ -122,7 +147,7 @@ class ContextLogIndicator extends PanelMenu.Button {
             const text = this._todoEntry.get_text().trim();
             if (text) {
                 const todos = readTodos();
-                todos.push({text, done: false});
+                todos.push({text, done: false, priority: 'med', added: Date.now()});
                 writeTodos(todos);
             }
             this._todoEntry.set_text('');
@@ -214,6 +239,9 @@ class ContextLogIndicator extends PanelMenu.Button {
 
     _refreshTodos() {
         const todos = readTodos();
+        // Sort by priority first, then by time added (oldest first).
+        todos.sort((a, b) =>
+            (PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]) || (a.added - b.added));
         this._todoList.destroy_all_children();
         if (todos.length === 0) {
             const empty = new St.Label({text: 'No to-dos', style_class: 'context-log-todo-empty'});
@@ -222,7 +250,7 @@ class ContextLogIndicator extends PanelMenu.Button {
             return;
         }
         const current = this._label.text;
-        todos.forEach((todo, i) => {
+        todos.forEach(todo => {
             const isCurrent = current !== '' && todo.text === current;
             const toggle = () => {
                 todo.done = !todo.done;
@@ -240,6 +268,17 @@ class ContextLogIndicator extends PanelMenu.Button {
                 }),
             });
             check.connect('clicked', toggle);
+            // Priority chip: click to cycle High -> Medium -> Low.
+            const prio = new St.Button({style_class: `context-log-prio context-log-prio-${todo.priority}`});
+            prio.set_child(new St.Label({
+                text: PRIORITY_LABEL[todo.priority],
+                y_align: Clutter.ActorAlign.CENTER,
+            }));
+            prio.connect('clicked', () => {
+                todo.priority = PRIORITY_NEXT[todo.priority];
+                writeTodos(todos);
+                this._refreshTodos();
+            });
             const label = new St.Label({
                 x_expand: true,
                 x_align: Clutter.ActorAlign.START,
@@ -252,14 +291,24 @@ class ContextLogIndicator extends PanelMenu.Button {
             if (isCurrent)
                 markup = `<b>${markup}</b>`;
             label.clutter_text.set_markup(markup);
-            // Clicking the text sets this to-do as the task you're working on now.
+            // Double-clicking the text sets this to-do as the task you're working on now.
             const labelBtn = new St.Button({
                 x_expand: true,
                 x_align: Clutter.ActorAlign.FILL,
                 child: label,
                 style_class: 'context-log-todo-labelbtn',
             });
-            labelBtn.connect('clicked', () => this._record(todo.text));
+            let lastPressMs = 0;
+            labelBtn.connect('button-press-event', () => {
+                const nowMs = GLib.get_monotonic_time() / 1000;
+                if (nowMs - lastPressMs < 400) {
+                    lastPressMs = 0;
+                    this._record(todo.text);
+                    return Clutter.EVENT_STOP;
+                }
+                lastPressMs = nowMs;
+                return Clutter.EVENT_PROPAGATE;
+            });
             if (todo.done)
                 labelBtn.opacity = 140;
             const remove = new St.Button({
@@ -267,11 +316,14 @@ class ContextLogIndicator extends PanelMenu.Button {
                 child: new St.Icon({icon_name: 'window-close-symbolic', icon_size: 16}),
             });
             remove.connect('clicked', () => {
-                todos.splice(i, 1);
+                const idx = todos.indexOf(todo);
+                if (idx >= 0)
+                    todos.splice(idx, 1);
                 writeTodos(todos);
                 this._refreshTodos();
             });
             row.add_child(check);
+            row.add_child(prio);
             row.add_child(labelBtn);
             row.add_child(remove);
             this._todoList.add_child(row);
