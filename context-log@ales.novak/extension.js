@@ -17,10 +17,11 @@ const TODO_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log',
 const PREVIOUS_LIMIT = 10;
 const TIMELINE_LIMIT = 50;
 
-// To-do priority: High > Medium > Low. Click the chip to cycle.
+// To-do priority: High > Medium > Low. New to-dos start at Medium; clicking
+// the chip cycles Medium -> High -> Low -> Medium.
 const PRIORITIES = ['high', 'med', 'low'];
 const PRIORITY_RANK = {high: 0, med: 1, low: 2};
-const PRIORITY_NEXT = {high: 'med', med: 'low', low: 'high'};
+const PRIORITY_NEXT = {med: 'high', high: 'low', low: 'med'};
 const PRIORITY_LABEL = {high: 'H', med: 'M', low: 'L'};
 
 function readEntries() {
@@ -287,7 +288,7 @@ class ContextLogIndicator extends PanelMenu.Button {
                 }),
             });
             check.connect('clicked', toggle);
-            // Priority chip: click to cycle High -> Medium -> Low.
+            // Priority chip: click to cycle Medium -> High -> Low.
             const prio = new St.Button({style_class: 'context-log-prio'});
             prio.set_child(new St.Label({
                 text: PRIORITY_LABEL[todo.priority],
