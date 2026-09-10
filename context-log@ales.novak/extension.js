@@ -16,7 +16,6 @@ import {CheckBox} from 'resource:///org/gnome/shell/ui/checkBox.js';
 // starting another one (lunch, end of day).
 const LOG_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log', 'entries.jsonl']);
 const TODO_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log', 'todos.json']);
-const PREVIOUS_LIMIT = 10;
 const TIMELINE_LIMIT = 50;
 const DOUBLE_CLICK_MS = 400;
 
@@ -164,11 +163,6 @@ class ContextLogIndicator extends PanelMenu.Button {
         entryItem.add_child(this._addTodoCheck);
         this.menu.addMenuItem(entryItem);
 
-        // Previous descriptions: click one to record a switch to it.
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('Previous'));
-        this._previousSection = new PopupMenu.PopupMenuSection();
-        this.menu.addMenuItem(this._previousSection);
-
         // To-do: a simple checklist. Add on Enter, click to toggle, X to remove.
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('To-do'));
         const todoEntryItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
@@ -255,18 +249,6 @@ class ContextLogIndicator extends PanelMenu.Button {
         const last = this._entries[this._entries.length - 1];
         const running = !!last && !last.stop;
         this._label.text = running ? last.description : '';
-
-        this._previousSection.removeAll();
-        const seen = new Set();
-        for (let i = this._entries.length - 1; i >= 0 && seen.size < PREVIOUS_LIMIT; i--) {
-            const {description, stop} = this._entries[i];
-            if (stop || seen.has(description))
-                continue;
-            seen.add(description);
-            const item = new PopupMenu.PopupMenuItem(description);
-            item.connect('activate', () => this._record(description));
-            this._previousSection.addMenuItem(item);
-        }
 
         this._timeline.destroy_all_children();
         const first = Math.max(0, this._entries.length - TIMELINE_LIMIT);
