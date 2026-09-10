@@ -59,11 +59,11 @@ function appendEntry(record) {
     stream.close(null);
 }
 
-// Run `callback` when `button` is pressed twice within DOUBLE_CLICK_MS.
-// A single press propagates so the button still shows its pressed state.
-function onDoubleClick(button, callback) {
+// Run `callback` when `actor` is pressed twice within DOUBLE_CLICK_MS.
+// A single press propagates so a button still shows its pressed state.
+function onDoubleClick(actor, callback) {
     let lastPressMs = 0;
-    button.connect('button-press-event', () => {
+    actor.connect('button-press-event', () => {
         const nowMs = GLib.get_monotonic_time() / 1000;
         if (nowMs - lastPressMs < DOUBLE_CLICK_MS) {
             lastPressMs = 0;
@@ -280,7 +280,13 @@ class ContextLogIndicator extends PanelMenu.Button {
         for (let i = this._entries.length - 1; i >= first; i--) {
             const entry = this._entries[i];
             const end = this._entries[i + 1]?.unix ?? now;
-            const row = new St.BoxLayout({style_class: 'context-log-row'});
+            // The row itself is reactive (hover highlight, double-click) rather
+            // than wrapped in a button, so it is laid out like a plain list row.
+            const row = new St.BoxLayout({
+                style_class: 'context-log-row',
+                reactive: !entry.stop,
+                track_hover: !entry.stop,
+            });
             row.add_child(new St.Label({
                 text: GLib.DateTime.new_from_unix_local(entry.unix).format('%Y-%m-%d %H:%M'),
                 style_class: 'context-log-time',
@@ -299,10 +305,9 @@ class ContextLogIndicator extends PanelMenu.Button {
                 text: entry.stop ? '' : formatDuration(end - entry.unix),
                 style_class: 'context-log-duration',
             }));
-            const rowBtn = new St.Button({child: row, x_expand: true, reactive: !entry.stop, style_class: 'context-log-rowbtn'});
             if (!entry.stop)
-                onDoubleClick(rowBtn, () => this._record(entry.description));
-            this._timeline.add_child(rowBtn);
+                onDoubleClick(row, () => this._record(entry.description));
+            this._timeline.add_child(row);
         }
 
         this._refreshTodos();

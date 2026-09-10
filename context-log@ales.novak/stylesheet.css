@@ -1,9 +1,8 @@
 .context-log-panel-label { max-width: 340px; }
 .context-log-entry { min-width: 24em; }
 .context-log-timeline { max-height: 320px; }
-.context-log-row { padding: 2px 12px 2px 24px; spacing: 12px; }
-.context-log-rowbtn { border-radius: 5px; }
-.context-log-rowbtn:hover { background-color: rgba(127,127,127,0.15); }
+.context-log-row { padding: 2px 12px 2px 24px; spacing: 12px; border-radius: 5px; }
+.context-log-row:hover { background-color: rgba(127,127,127,0.15); }
 .context-log-time { font-family: monospace; }
 .context-log-desc { max-width: 380px; }
 .context-log-duration { min-width: 4em; text-align: right; }
