@@ -76,6 +76,12 @@ Before shipping any change or running any reinstall, confirm the two data files
 above are intact and unchanged (unless the change is a deliberate, tested
 migration).
 
+## Backlog
+
+`backlog.md` lists the work still to do. When an item has been implemented and
+installed, delete it from `backlog.md` in the same session; never leave a
+finished item listed.
+
 ## Always commit and push
 
 Once a change is implemented, tested and installed, commit it and push to
