@@ -14,6 +14,9 @@ import {CheckBox} from 'resource:///org/gnome/shell/ui/checkBox.js';
 // One line per record: {"time":"2026-09-10T10:41:23+02:00","description":"Fix build"}
 // A stop record {"time":"...","stop":true} ends the running task without
 // starting another one (lunch, end of day).
+// A rename record {"time":"...","rename":{"from":"Old","to":"New"}} retitles
+// every record above it described as `from`; the lines themselves are never
+// rewritten, so the log stays append-only.
 const LOG_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log', 'entries.jsonl']);
 const TODO_FILE = GLib.build_filenamev([GLib.get_user_data_dir(), 'context-log', 'todos.json']);
 const TIMELINE_LIMIT = 50;
@@ -36,12 +39,18 @@ function readEntries() {
         if (!line.trim())
             continue;
         try {
-            const {time, description, stop} = JSON.parse(line);
+            const {time, description, stop, rename} = JSON.parse(line);
             const dt = GLib.DateTime.new_from_iso8601(time, null);
-            if (dt && stop === true)
+            if (dt && stop === true) {
                 entries.push({unix: dt.to_unix(), stop: true});
-            else if (dt && description)
+            } else if (dt && description) {
                 entries.push({unix: dt.to_unix(), description});
+            } else if (dt && typeof rename?.from === 'string' && typeof rename.to === 'string' && rename.to) {
+                for (const entry of entries) {
+                    if (entry.description === rename.from)
+                        entry.description = rename.to;
+                }
+            }
         } catch (e) {
             console.warn(`Context Log: skipping line: ${line}`);
         }
@@ -267,6 +276,20 @@ class ContextLogIndicator extends PanelMenu.Button {
         writeTodos(todos);
     }
 
+    // Change a to-do's title. If the task is in the log, a rename record makes
+    // its timeline rows (and the panel label, when it is running) follow.
+    _renameTodo(todos, todo, text) {
+        text = text.trim();
+        if (text && text !== todo.text) {
+            if (this._entries.some(e => e.description === todo.text))
+                appendEntry({rename: {from: todo.text, to: text}});
+            todo.text = text;
+            writeTodos(todos);
+        }
+        this._refresh();
+        this._todoEntry.grab_key_focus();
+    }
+
     _refresh() {
         this._entries = readEntries();
         const now = Math.floor(Date.now() / 1000);
@@ -431,6 +454,22 @@ class ContextLogIndicator extends PanelMenu.Button {
                     y_align: Clutter.ActorAlign.CENTER,
                     style_class: 'context-log-time context-log-todo-done-at',
                 }));
+            } else {
+                // Pencil: swap the title for a text field; Enter saves. Escape
+                // closes the menu, as in the other fields, discarding the edit.
+                const edit = new St.Button({
+                    style_class: 'context-log-todo-edit',
+                    child: new St.Icon({icon_name: 'document-edit-symbolic', icon_size: 16}),
+                });
+                edit.connect('clicked', () => {
+                    const entry = new St.Entry({text: todo.text, x_expand: true, style_class: 'context-log-todo-rename'});
+                    entry.clutter_text.connect('activate', () => this._renameTodo(todos, todo, entry.get_text()));
+                    row.replace_child(labelBtn, entry);
+                    labelBtn.destroy();
+                    edit.hide();
+                    entry.grab_key_focus();
+                });
+                row.add_child(edit);
             }
             row.add_child(remove);
             this._todoList.add_child(row);
