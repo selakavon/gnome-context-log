@@ -81,9 +81,11 @@ function formatDuration(seconds) {
     return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
 }
 
-// To-dos: a JSON array of {text, done, priority, added}.
+// To-dos: a JSON array of {text, done, priority, added, doneAt?}.
 // Older files (without priority/added) are migrated in place on read; no data
 // is dropped. `added` is a monotonic key used only to order equal priorities.
+// `doneAt` (ms since the epoch) is set when a to-do is checked off and removed
+// when it is reopened; to-dos finished before it existed simply have none.
 function readTodos() {
     const file = Gio.File.new_for_path(TODO_FILE);
     if (!file.query_exists(null))
@@ -109,7 +111,12 @@ function readTodos() {
         const added = typeof t.added === 'number' ? t.added : i;
         if (t.priority !== priority || typeof t.added !== 'number')
             changed = true;
-        todos.push({text: t.text, done: !!t.done, priority, added});
+        const todo = {text: t.text, done: !!t.done, priority, added};
+        if (todo.done && typeof t.doneAt === 'number')
+            todo.doneAt = t.doneAt;
+        else if (t.doneAt !== undefined)
+            changed = true;
+        todos.push(todo);
     });
     if (changed)
         writeTodos(todos);
@@ -173,6 +180,7 @@ class ContextLogIndicator extends PanelMenu.Button {
                 const todos = readTodos();
                 todos.push({text, done: false, priority: 'med', added: Date.now()});
                 writeTodos(todos);
+                this._todoTab = 'open';
             }
             this._todoEntry.set_text('');
             this._refreshTodos();
@@ -180,6 +188,21 @@ class ContextLogIndicator extends PanelMenu.Button {
         });
         todoEntryItem.add_child(this._todoEntry);
         this.menu.addMenuItem(todoEntryItem);
+        // Tabs: "Open" lists what is still to do (by priority, then time
+        // added); "Done" lists finished to-dos, most recently finished first.
+        this._todoTab = 'open';
+        this._todoTabs = {};
+        const tabsItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        for (const tab of ['open', 'done']) {
+            const btn = new St.Button({style_class: 'context-log-tab'});
+            btn.connect('clicked', () => {
+                this._todoTab = tab;
+                this._refreshTodos();
+            });
+            this._todoTabs[tab] = btn;
+            tabsItem.add_child(btn);
+        }
+        this.menu.addMenuItem(tabsItem);
         this._todoList = new St.BoxLayout({vertical: true, style_class: 'context-log-todo-list'});
         const todoSection = new PopupMenu.PopupMenuSection();
         todoSection.actor.add_child(this._todoList);
@@ -205,6 +228,7 @@ class ContextLogIndicator extends PanelMenu.Button {
             this._closeOnRelease = false;
             this._entry.set_text('');
             this._addTodoCheck.checked = true;
+            this._todoTab = 'open';
             this._refresh();
             this._focusId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                 this._focusId = 0;
@@ -301,22 +325,42 @@ class ContextLogIndicator extends PanelMenu.Button {
     }
 
     _refreshTodos() {
+        // `todos` is the full list and is what gets written back; the tabs
+        // only show a filtered, sorted view of it.
         const todos = readTodos();
-        // Sort by priority first, then by time added (oldest first).
-        todos.sort((a, b) =>
+        const open = todos.filter(t => !t.done);
+        const done = todos.filter(t => t.done);
+        // Open: by priority first, then by time added (oldest first).
+        open.sort((a, b) =>
             (PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]) || (a.added - b.added));
+        // Done: most recently finished first. To-dos finished before the done
+        // time was recorded have no `doneAt` and fall back to their added time.
+        done.sort((a, b) => (b.doneAt ?? b.added) - (a.doneAt ?? a.added));
+        this._todoTabs.open.label = `Open (${open.length})`;
+        this._todoTabs.done.label = `Done (${done.length})`;
+        for (const [tab, btn] of Object.entries(this._todoTabs))
+            btn.checked = tab === this._todoTab;
+        const shown = this._todoTab === 'done' ? done : open;
+
         this._todoList.destroy_all_children();
-        if (todos.length === 0) {
-            const empty = new St.Label({text: 'No to-dos', style_class: 'context-log-todo-empty'});
+        if (shown.length === 0) {
+            const empty = new St.Label({
+                text: this._todoTab === 'done' ? 'No done to-dos' : 'No open to-dos',
+                style_class: 'context-log-todo-empty',
+            });
             empty.opacity = 140;
             this._todoList.add_child(empty);
             return;
         }
         const current = this._label.text;
-        todos.forEach(todo => {
+        shown.forEach(todo => {
             const isCurrent = current !== '' && todo.text === current;
             const toggle = () => {
                 todo.done = !todo.done;
+                if (todo.done)
+                    todo.doneAt = Date.now();
+                else
+                    delete todo.doneAt;
                 writeTodos(todos);
                 this._refreshTodos();
             };
@@ -379,6 +423,15 @@ class ContextLogIndicator extends PanelMenu.Button {
             row.add_child(check);
             row.add_child(prio);
             row.add_child(labelBtn);
+            if (todo.done) {
+                // When it was finished; blank for to-dos done before this was recorded.
+                row.add_child(new St.Label({
+                    text: todo.doneAt === undefined ? ''
+                        : GLib.DateTime.new_from_unix_local(Math.floor(todo.doneAt / 1000)).format('%Y-%m-%d %H:%M'),
+                    y_align: Clutter.ActorAlign.CENTER,
+                    style_class: 'context-log-time context-log-todo-done-at',
+                }));
+            }
             row.add_child(remove);
             this._todoList.add_child(row);
         });

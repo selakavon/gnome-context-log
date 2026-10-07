@@ -11,11 +11,15 @@
 .context-log-stop-btn:hover { background-color: rgba(127,127,127,0.25); }
 .context-log-stop-spacer { width: 20px; }
 .context-log-todo-list { padding: 2px 0; }
+.context-log-tab { padding: 2px 12px; border-radius: 5px; }
+.context-log-tab:hover { background-color: rgba(127,127,127,0.15); }
+.context-log-tab:checked { background-color: rgba(127,127,127,0.28); }
 .context-log-todo-row { padding: 1px 8px 1px 16px; spacing: 6px; }
 .context-log-todo-check:hover, .context-log-todo-remove:hover, .context-log-todo-labelbtn:hover { background-color: rgba(127,127,127,0.15); border-radius: 5px; }
 .context-log-todo-check, .context-log-todo-remove { padding: 2px; border-radius: 5px; }
 .context-log-todo-labelbtn { padding: 2px 4px; border-radius: 5px; }
 .context-log-todo-empty { padding: 4px 12px 4px 24px; }
+.context-log-todo-done-at { padding: 0 4px; }
 .context-log-todo-current { background-color: rgba(120,160,255,0.16); border-radius: 6px; }
 .context-log-prio { min-width: 1.5em; text-align: center; border-radius: 5px; padding: 0 4px; }
 .context-log-prio:hover { background-color: rgba(127,127,127,0.18); }
