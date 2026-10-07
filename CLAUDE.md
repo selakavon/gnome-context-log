@@ -75,3 +75,10 @@ irreplaceable. Keep the timestamped backups under
 Before shipping any change or running any reinstall, confirm the two data files
 above are intact and unchanged (unless the change is a deliberate, tested
 migration).
+
+## Always commit and push
+
+Once a change is implemented, tested and installed, commit it and push to
+`origin/main` in the same session, without waiting to be asked. Never leave
+finished work uncommitted in the working tree or commits unpushed. Keep each
+commit to one change, as in the existing history.
